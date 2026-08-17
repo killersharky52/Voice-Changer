@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>FAZ CHANGER — Live Voice Processor</title>
+
+<!-- PWA / "Add to Home Screen" support -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0a0b">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- iOS-specific home screen behavior -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FAZ CHANGER">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="favicon-32.png" sizes="32x32">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0b;
+    --panel:#141416;
+    --panel-raised:#1a1a1c;
+    --metal:#1c1c1f;
+    --metal-hi:#242427;
+    --line:#2e2e32;
+    --red:#e8303c;
+    --red-dim:#7a1319;
+    --gray:#9a9a9e;
+    --gray-dim:#4a4a4e;
+    --ink:#f2f2f2;
+    --ink-dim:#9a9a9e;
+    --white:#ffffff;
+    --mono:'JetBrains Mono', monospace;
+    --sans:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at 50% -10%, #151517 0%, var(--bg) 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:calc(24px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));
+  }
+  .unit{
+    width:100%;
+    max-width:560px;
+    background:linear-gradient(180deg, var(--panel-raised), var(--panel));
+    border-radius:18px;
+    border:1px solid #05100c;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 30px 60px -20px rgba(0,0,0,0.7),
+      0 0 0 1px rgba(0,0,0,0.4);
+    padding:18px 18px 22px;
+    position:relative;
+    overflow:hidden;
+  }
+  .unit::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 3px);
+    pointer-events:none;
+    opacity:0.4;
+  }
+  .rivet{
+    position:absolute; width:6px; height:6px; border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #5a5a5e, #0a0a0b 70%);
+    box-shadow:0 1px 0 rgba(255,255,255,0.08);
+  }
+  .rivet.tl{top:12px;left:12px;} .rivet.tr{top:12px;right:12px;}
+  .rivet.bl{bottom:12px;left:12px;} .rivet.br{bottom:12px;right:12px;}
+
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:2px 4px 16px;
+    border-bottom:1px solid var(--line);
+    margin-bottom:16px;
+  }
+  .brand{display:flex; flex-direction:column; gap:2px;}
+  .brand .name{
+    font-family:var(--mono); font-weight:800; letter-spacing:3px;
+    font-size:20px; color:var(--ink);
+  }
+  .brand .name span{color:var(--red); text-shadow:0 0 12px rgba(232,48,60,0.5);}
+  .brand .sub{
+    font-family:var(--mono); font-size:10px; letter-spacing:2px;
+    color:var(--ink-dim); text-transform:uppercase;
+  }
+  .power{
+    display:flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:11px; letter-spacing:1.5px; color:var(--ink-dim);
+  }
+  .led{
+    width:9px; height:9px; border-radius:50%;
+    background:#3a2323; box-shadow:inset 0 0 2px rgba(0,0,0,0.6);
+    transition:background .2s, box-shadow .2s;
+  }
+  .led.on{background:var(--red); box-shadow:0 0 8px 2px rgba(232,48,60,0.7), inset 0 0 2px rgba(0,0,0,0.3);}
+  .led.rec.on{background:var(--red); box-shadow:0 0 8px 2px rgba(255,93,93,0.7);}
+
+  .scope{
+    background:#0a0505;
+    border-radius:10px;
+    border:1px solid #030605;
+    box-shadow:inset 0 2px 10px rgba(0,0,0,0.8), inset 0 0 30px rgba(232,48,60,0.03);
+    padding:10px;
+    margin-bottom:16px;
+    position:relative;
+  }
+  .scope-label{
+    display:flex; justify-content:space-between;
+    font-family:var(--mono); font-size:9px; letter-spacing:1.5px;
+    color:var(--red-dim); text-transform:uppercase; margin-bottom:6px;
+  }
+  canvas#scope-canvas{
+    width:100%; height:120px; display:block; border-radius:4px;
+  }
+
+  .status-row{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:var(--mono); font-size:10px; letter-spacing:1px;
+    color:var(--ink-dim); padding:0 2px; margin-bottom:16px;
+  }
+  .status-row .val{color:var(--red);}
+
+  .start-btn{
+    width:100%; padding:14px 16px; border-radius:10px; border:none;
+    font-family:var(--mono); font-weight:700; letter-spacing:2px; font-size:13px;
+    text-transform:uppercase; cursor:pointer;
+    background:linear-gradient(180deg, #ff4550, var(--red));
+    color:#ffffff;
+    box-shadow:0 4px 0 #7a1319, 0 6px 12px rgba(0,0,0,0.4);
+    margin-bottom:18px;
+    transition:transform .06s;
+  }
+  .start-btn:active{transform:translateY(3px); box-shadow:0 1px 0 #7a1319;}
+  .start-btn.stop{
+    background:linear-gradient(180deg, #3a3a3d, #19191b);
+    color:#ffffff; box-shadow:0 4px 0 #050505, 0 6px 12px rgba(0,0,0,0.4);
+  }
+  .start-btn:disabled{opacity:0.5; cursor:not-allowed;}
+
+  .section-label{
+    font-family:var(--mono); font-size:10px; letter-spacing:2px;
+    color:var(--ink-dim); text-transform:uppercase;
+    margin:18px 0 10px; display:flex; align-items:center; gap:8px;
+  }
+  .section-label::after{content:""; flex:1; height:1px; background:var(--line);}
+
+  .presets{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(78px, 1fr)); gap:8px;
+  }
+  .patch{
+    background:linear-gradient(180deg, var(--metal-hi), var(--metal));
+    border:1px solid #05100c;
+    border-radius:8px;
+    padding:10px 4px 8px;
+    text-align:center;
+    cursor:pointer;
+    font-family:var(--mono); font-size:9.5px; letter-spacing:0.5px;
+    color:var(--ink-dim);
+    box-shadow:0 2px 0 #060b09, inset 0 1px 0 rgba(255,255,255,0.04);
+    transition:all .12s;
+    position:relative;
+  }
+  .patch .dot{
+    width:6px; height:6px; border-radius:50%; margin:0 auto 6px;
+    background:#2a3a34;
+  }
+  .patch:hover{color:var(--ink); border-color:var(--red-dim);}
+  .patch.active{
+    color:var(--red); border-color:var(--red-dim);
+    box-shadow:0 0 0 1px var(--red-dim), 0 2px 0 #060b09;
+  }
+  .patch.active .dot{background:var(--red); box-shadow:0 0 6px 1px rgba(232,48,60,0.7);}
+  .patch.add-preset{
+    border-style:dashed; border-color:var(--line);
+    color:var(--gray); background:transparent;
+    box-shadow:none;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+  }
+  .patch.add-preset .plus{
+    font-family:var(--mono); font-size:16px; line-height:1; color:var(--white);
+    margin-bottom:4px;
+  }
+  .patch.add-preset:hover{border-color:var(--white); color:var(--white);}
+  .patch-delete{
+    position:absolute; top:-6px; right:-6px;
+    width:16px; height:16px; border-radius:50%;
+    background:var(--red); color:var(--white);
+    font-family:var(--mono); font-size:10px; line-height:16px; text-align:center;
+    box-shadow:0 1px 3px rgba(0,0,0,0.6), 0 0 0 2px var(--panel);
+    cursor:pointer;
+  }
+  .patch-delete:hover{background:#ff5a5a;}
+
+  .fader-row{
+    display:flex; align-items:center; gap:14px;
+    padding:10px 4px;
+  }
+  .fader-row .flabel{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:1px;
+    width:74px; color:var(--ink-dim); flex-shrink:0;
+  }
+  .fader-row .fval{
+    font-family:var(--mono); font-size:11px; color:var(--red);
+    width:46px; text-align:right; flex-shrink:0;
+  }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    flex:1; height:4px; border-radius:2px;
+    background:linear-gradient(90deg, var(--red-dim), var(--line) 50%, var(--line));
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:16px; height:16px; border-radius:4px;
+    background:linear-gradient(180deg,#e9ede9,#a8b8b1);
+    border:1px solid #0a0a0b;
+    box-shadow:0 2px 3px rgba(0,0,0,0.5);
+    cursor:pointer;
+    margin-top:-1px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px; height:16px; border-radius:4px; border:1px solid #0a0a0b;
+    background:linear-gradient(180deg,#e9ede9,#a8b8b1); cursor:pointer;
+  }
+
+  .footnote{
+    margin-top:18px; padding:10px 12px;
+    background:rgba(232,48,60,0.07);
+    border:1px solid rgba(232,48,60,0.28);
+    border-radius:8px;
+    font-family:var(--sans); font-size:11.5px; line-height:1.5;
+    color:#d9d9db;
+  }
+  .footnote b{color:var(--red);}
+
+  .perm-note{
+    font-family:var(--sans); font-size:11.5px; color:var(--ink-dim);
+    text-align:center; margin-bottom:14px; line-height:1.5;
+  }
+
+  @media (max-width:400px){
+    .presets{grid-template-columns:repeat(auto-fill, minmax(66px, 1fr));}
+    .fader-row .flabel{width:60px; font-size:9.5px;}
+    .patch{font-size:8.8px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="unit">
+  <div class="rivet tl"></div><div class="rivet tr"></div>
+  <div class="rivet bl"></div><div class="rivet br"></div>
+
+  <header>
+    <div class="brand">
+      <div class="name">FAZ <span>CHANGER</span></div>
+      <div class="sub">Real-Time Voice Processor</div>
+    </div>
+    <div class="power">
+      <span id="status-text">STANDBY</span>
+      <div class="led rec" id="led-rec"></div>
+    </div>
+  </header>
+
+  <div class="scope">
+    <div class="scope-label"><span>INPUT MONITOR</span><span id="latency-label">LATENCY —</span></div>
+    <canvas id="scope-canvas" width="600" height="120"></canvas>
+  </div>
+
+  <div class="status-row">
+    <span>MIC: <span class="val" id="mic-state">OFF</span></span>
+    <span>PITCH: <span class="val" id="pitch-readout">0 st</span></span>
+    <span>PATCH: <span class="val" id="patch-readout">NORMAL</span></span>
+  </div>
+
+  <button class="start-btn" id="start-btn">▶ Start Listening</button>
+  <div class="perm-note">Tap start, then allow microphone access. <b>Use headphones</b> to avoid feedback squeal through your speakers.</div>
+
+  <div class="section-label">Patch Select</div>
+  <div class="presets" id="presets"></div>
+
+  <div class="section-label">Manual Controls</div>
+  <div class="fader-row">
+    <span class="flabel">PITCH</span>
+    <input type="range" id="pitch-slider" min="-12" max="12" step="1" value="0">
+    <span class="fval" id="pitch-val">0 st</span>
+  </div>
+  <div class="fader-row">
+    <span class="flabel">FORMANT</span>
+    <input type="range" id="formant-slider" min="-100" max="100" step="1" value="0">
+    <span class="fval" id="formant-val">0%</span>
+  </div>
+  <div class="fader-row">
+    <span class="flabel">ROBOT MOD</span>
+    <input type="range" id="robot-slider" min="0" max="100" step="1" value="0">
+    <span class="fval" id="robot-val">0%</span>
+  </div>
+  <div class="fader-row">
+    <span class="flabel">ECHO</span>
+    <input type="range" id="echo-slider" min="0" max="100" step="1" value="0">
+    <span class="fval" id="echo-val">0%</span>
+  </div>
+  <div class="fader-row">
+    <span class="flabel">OUTPUT VOL</span>
+    <input type="range" id="vol-slider" min="0" max="150" step="1" value="100">
+    <span class="fval" id="vol-val">100%</span>
+  </div>
+
+  <div class="footnote">
+    <b>About Formant:</b> pitch alone makes a "chipmunk," not a different gender — the real cue is formant structure (the resonance pattern set by vocal tract shape). This control cuts your voice's natural resonance at its original frequencies and boosts a new one at the shifted target. Push the slider toward the ends (±80–100%) for a clearly audible change. It's still DSP filtering, not AI voice conversion.
+  </div>
+  <div class="footnote">
+    <b>Note:</b> this runs entirely in your browser — audio never leaves your device. It works like an app: add this page to your phone's home screen for a full-screen icon. For true feedback-free speaker playback, wired or Bluetooth headphones are strongly recommended.
+  </div>
+  <div class="footnote">
+    <b>Presets:</b> dial in a sound, then tap <b>+ Save Preset</b> to name and add it to the list. Custom presets show a small × to delete them; the seven built-in presets can't be removed. Saved presets are stored locally in this browser, so they'll still be here next time you open this file on this device — but won't follow you to a different browser or computer.
+  </div>
+</div>
+
+<script>
+// ---------- Pitch-shift AudioWorklet (granular, 2-grain overlap-add) ----------
+const WORKLET_CODE = `
+class PitchShiftProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [{ name: 'pitch', defaultValue: 1, minValue: 0.4, maxValue: 2.6, automationRate: 'k-rate' }];
+  }
+  constructor() {
+    super();
+    this.grainSize = Math.floor(sampleRate * 0.05); // ~50ms grains
+    this.bufferSize = this.grainSize * 4;
+    this.buffer = new Float32Array(this.bufferSize);
+    this.writePos = 0;
+    this.phase = [0, Math.floor(this.grainSize / 2)];
+    this.readPos = [
+      (this.bufferSize - this.grainSize) % this.bufferSize,
+      (this.bufferSize - this.grainSize / 2) % this.bufferSize
+    ];
+    this.win = new Float32Array(this.grainSize);
+    for (let i = 0; i < this.grainSize; i++) {
+      this.win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / this.grainSize);
+    }
+  }
+  _readInterp(pos) {
+    const len = this.bufferSize;
+    const p = ((pos % len) + len) % len;
+    const i0 = Math.floor(p);
+    const i1 = (i0 + 1) % len;
+    const frac = p - i0;
+    return this.buffer[i0] * (1 - frac) + this.buffer[i1] * frac;
+  }
+  process(inputs, outputs, parameters) {
+    const input = inputs[0][0];
+    const output = outputs[0][0];
+    if (!input || !output) return true;
+    const pitch = parameters.pitch[0];
+    const G = this.grainSize;
+    for (let i = 0; i < input.length; i++) {
+      this.buffer[this.writePos] = input[i];
+      let out = 0;
+      for (let g = 0; g < 2; g++) {
+        const w = this.win[this.phase[g]];
+        out += w * this._readInterp(this.readPos[g]);
+        this.phase[g]++;
+        this.readPos[g] += pitch;
+        if (this.phase[g] >= G) {
+          this.phase[g] = 0;
+          this.readPos[g] = (this.writePos - G + this.bufferSize) % this.bufferSize;
+        }
+      }
+      output[i] = out;
+      this.writePos = (this.writePos + 1) % this.bufferSize;
+    }
+    return true;
+  }
+}
+registerProcessor('pitch-shift-processor', PitchShiftProcessor);
+`;
+
+let audioCtx, micStream, sourceNode, pitchNode;
+let ringOsc, ringGain, ringOscDepth, dryGain, wetGain;
+let delayNode, feedbackGain, delayWetGain, delayDryGain;
+let distNode, masterGain, analyser, mixBus;
+let formantCut1, formantCut2, formantCut3, formantF1, formantF2, formantF3, formantHighShelf, formantLowShelf, formantSafety;
+let running = false;
+
+// Approximate average vowel-formant centers (Hz) for a neutral adult voice.
+// These get frequency-shifted and gain-boosted toward male or female
+// vocal-tract resonance patterns by the formant control.
+const FORMANT_BASE = { f1: 500, f2: 1500, f3: 2500 };
+
+const els = {
+  startBtn: document.getElementById('start-btn'),
+  statusText: document.getElementById('status-text'),
+  ledRec: document.getElementById('led-rec'),
+  micState: document.getElementById('mic-state'),
+  pitchReadout: document.getElementById('pitch-readout'),
+  patchReadout: document.getElementById('patch-readout'),
+  latencyLabel: document.getElementById('latency-label'),
+  pitchSlider: document.getElementById('pitch-slider'),
+  pitchVal: document.getElementById('pitch-val'),
+  formantSlider: document.getElementById('formant-slider'),
+  formantVal: document.getElementById('formant-val'),
+  robotSlider: document.getElementById('robot-slider'),
+  robotVal: document.getElementById('robot-val'),
+  echoSlider: document.getElementById('echo-slider'),
+  echoVal: document.getElementById('echo-val'),
+  volSlider: document.getElementById('vol-slider'),
+  volVal: document.getElementById('vol-val'),
+  canvas: document.getElementById('scope-canvas'),
+};
+
+function semitonesToRatio(st) { return Math.pow(2, st / 12); }
+
+async function startAudio() {
+  els.startBtn.disabled = true;
+  els.startBtn.textContent = 'Requesting mic…';
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
+  } catch (err) {
+    els.startBtn.disabled = false;
+    els.startBtn.textContent = '▶ Start Listening';
+    els.statusText.textContent = 'MIC BLOCKED';
+    alert('Microphone access was denied or unavailable. Please allow microphone permission and try again.');
+    return;
+  }
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+  const workletUrl = URL.createObjectURL(blob);
+  await audioCtx.audioWorklet.addModule(workletUrl);
+
+  sourceNode = audioCtx.createMediaStreamSource(micStream);
+  pitchNode = new AudioWorkletNode(audioCtx, 'pitch-shift-processor');
+
+  // Ring modulator (robot effect): oscillator feeding a gain's gain param = amplitude modulation
+  ringGain = audioCtx.createGain();
+  ringGain.gain.value = 1;
+  ringOsc = audioCtx.createOscillator();
+  ringOsc.type = 'sine';
+  ringOsc.frequency.value = 35;
+  ringOscDepth = audioCtx.createGain();
+  ringOscDepth.gain.value = 0; // depth, ramped by robot slider
+  ringOsc.connect(ringOscDepth);
+  ringOscDepth.connect(ringGain.gain);
+  ringOsc.start();
+
+  // Light distortion for grit on robot/cave patches
+  distNode = audioCtx.createWaveShaper();
+  distNode.curve = makeDistortionCurve(0);
+  distNode.oversample = '2x';
+
+  // Formant shaping bank, two stages:
+  // (1) CUT filters fixed at the natural/original formant frequencies —
+  //     these suppress your voice's own resonance so it stops fighting the
+  //     shifted target. Without this, boosting alone is nearly inaudible
+  //     because your real formants are already the loudest thing present.
+  // (2) BOOST filters at the shifted target frequencies to emphasize the
+  //     new resonance pattern. Plus brightness/warmth shelves.
+  formantCut1 = audioCtx.createBiquadFilter();
+  formantCut1.type = 'peaking'; formantCut1.Q.value = 1.6; formantCut1.frequency.value = FORMANT_BASE.f1; formantCut1.gain.value = 0;
+  formantCut2 = audioCtx.createBiquadFilter();
+  formantCut2.type = 'peaking'; formantCut2.Q.value = 1.7; formantCut2.frequency.value = FORMANT_BASE.f2; formantCut2.gain.value = 0;
+  formantCut3 = audioCtx.createBiquadFilter();
+  formantCut3.type = 'peaking'; formantCut3.Q.value = 1.5; formantCut3.frequency.value = FORMANT_BASE.f3; formantCut3.gain.value = 0;
+  formantF1 = audioCtx.createBiquadFilter();
+  formantF1.type = 'peaking'; formantF1.Q.value = 1.4; formantF1.frequency.value = FORMANT_BASE.f1; formantF1.gain.value = 0;
+  formantF2 = audioCtx.createBiquadFilter();
+  formantF2.type = 'peaking'; formantF2.Q.value = 1.5; formantF2.frequency.value = FORMANT_BASE.f2; formantF2.gain.value = 0;
+  formantF3 = audioCtx.createBiquadFilter();
+  formantF3.type = 'peaking'; formantF3.Q.value = 1.3; formantF3.frequency.value = FORMANT_BASE.f3; formantF3.gain.value = 0;
+  formantHighShelf = audioCtx.createBiquadFilter();
+  formantHighShelf.type = 'highshelf'; formantHighShelf.frequency.value = 5000; formantHighShelf.gain.value = 0;
+  formantLowShelf = audioCtx.createBiquadFilter();
+  formantLowShelf.type = 'lowshelf'; formantLowShelf.frequency.value = 160; formantLowShelf.gain.value = 0;
+  formantSafety = audioCtx.createGain();
+  formantSafety.gain.value = 1;
+
+  // Echo (delay + feedback), mixed via dry/wet gains
+  delayNode = audioCtx.createDelay(2.0);
+  delayNode.delayTime.value = 0.28;
+  feedbackGain = audioCtx.createGain();
+  feedbackGain.gain.value = 0.35;
+  delayNode.connect(feedbackGain);
+  feedbackGain.connect(delayNode);
+
+  delayDryGain = audioCtx.createGain();
+  delayWetGain = audioCtx.createGain();
+  delayDryGain.gain.value = 1;
+  delayWetGain.gain.value = 0;
+
+  mixBus = audioCtx.createGain();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 1.0;
+
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+
+  // Graph: source -> pitch -> ringGain -> distNode -> formant bank -> split(dry/wet delay) -> mixBus -> masterGain -> analyser -> destination
+  sourceNode.connect(pitchNode);
+  pitchNode.connect(ringGain);
+  ringGain.connect(distNode);
+
+  distNode.connect(formantCut1);
+  formantCut1.connect(formantCut2);
+  formantCut2.connect(formantCut3);
+  formantCut3.connect(formantF1);
+  formantF1.connect(formantF2);
+  formantF2.connect(formantF3);
+  formantF3.connect(formantHighShelf);
+  formantHighShelf.connect(formantLowShelf);
+  formantLowShelf.connect(formantSafety);
+
+  formantSafety.connect(delayDryGain);
+  formantSafety.connect(delayNode);
+  delayNode.connect(delayWetGain);
+
+  delayDryGain.connect(mixBus);
+  delayWetGain.connect(mixBus);
+
+  mixBus.connect(masterGain);
+  masterGain.connect(analyser);
+  analyser.connect(audioCtx.destination);
+
+  running = true;
+  els.startBtn.disabled = false;
+  els.startBtn.textContent = '■ Stop';
+  els.startBtn.classList.add('stop');
+  els.statusText.textContent = 'LIVE';
+  els.ledRec.classList.add('on');
+  els.micState.textContent = 'ON';
+  const baseLatency = audioCtx.baseLatency ? Math.round(audioCtx.baseLatency * 1000) : 0;
+  els.latencyLabel.textContent = 'LATENCY ~' + Math.max(baseLatency, 30) + 'ms';
+
+  applyAllParams();
+  drawScope();
+}
+
+function stopAudio() {
+  running = false;
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (audioCtx) audioCtx.close();
+  els.startBtn.textContent = '▶ Start Listening';
+  els.startBtn.classList.remove('stop');
+  els.statusText.textContent = 'STANDBY';
+  els.ledRec.classList.remove('on');
+  els.micState.textContent = 'OFF';
+  els.latencyLabel.textContent = 'LATENCY —';
+  const ctx = els.canvas.getContext('2d');
+  ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
+  drawIdleLine();
+}
+
+function makeDistortionCurve(amount) {
+  const n = 4096;
+  const curve = new Float32Array(n);
+  const k = amount;
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = amount === 0 ? x : ((3 + k) * x * 20 * (Math.PI / 180)) / (Math.PI + k * Math.abs(x));
+  }
+  return curve;
+}
+
+function applyAllParams() {
+  if (!running) return;
+  const semis = parseFloat(els.pitchSlider.value);
+  pitchNode.parameters.get('pitch').setTargetAtTime(semitonesToRatio(semis), audioCtx.currentTime, 0.01);
+
+  const t = parseFloat(els.formantSlider.value) / 100; // -1 (masc) .. +1 (fem)
+  const freqMult = 1 + 0.45 * t;
+  const now = audioCtx.currentTime;
+  const mag = Math.abs(t);
+
+  // Cut the natural formants (fixed at the original frequencies) so they
+  // stop dominating over the shifted target resonance.
+  formantCut1.frequency.setTargetAtTime(FORMANT_BASE.f1, now, 0.02);
+  formantCut2.frequency.setTargetAtTime(FORMANT_BASE.f2, now, 0.02);
+  formantCut3.frequency.setTargetAtTime(FORMANT_BASE.f3, now, 0.02);
+  formantCut1.gain.setTargetAtTime(-10 * mag, now, 0.02);
+  formantCut2.gain.setTargetAtTime(-13 * mag, now, 0.02);
+  formantCut3.gain.setTargetAtTime(-11 * mag, now, 0.02);
+
+  // Boost a new resonance at the shifted target frequencies.
+  formantF1.frequency.setTargetAtTime(FORMANT_BASE.f1 * freqMult, now, 0.02);
+  formantF2.frequency.setTargetAtTime(FORMANT_BASE.f2 * freqMult, now, 0.02);
+  formantF3.frequency.setTargetAtTime(FORMANT_BASE.f3 * freqMult, now, 0.02);
+  formantF1.gain.setTargetAtTime(9 * mag, now, 0.02);
+  formantF2.gain.setTargetAtTime(12 * mag, now, 0.02);
+  formantF3.gain.setTargetAtTime(10 * mag, now, 0.02);
+
+  formantHighShelf.gain.setTargetAtTime(t > 0 ? 5 * t : 0, now, 0.02);
+  formantLowShelf.gain.setTargetAtTime(t < 0 ? 5 * -t : 0, now, 0.02);
+  formantSafety.gain.setTargetAtTime(1 / (1 + 0.5 * mag), now, 0.02);
+
+  const robotAmt = parseFloat(els.robotSlider.value) / 100;
+  ringOscDepth.gain.setTargetAtTime(robotAmt * 0.9, audioCtx.currentTime, 0.02);
+  distNode.curve = makeDistortionCurve(robotAmt * 6);
+
+  const echoAmt = parseFloat(els.echoSlider.value) / 100;
+  delayWetGain.gain.setTargetAtTime(echoAmt * 0.7, audioCtx.currentTime, 0.02);
+  feedbackGain.gain.setTargetAtTime(0.25 + echoAmt * 0.25, audioCtx.currentTime, 0.02);
+
+  const vol = parseFloat(els.volSlider.value) / 100;
+  masterGain.gain.setTargetAtTime(vol, audioCtx.currentTime, 0.02);
+
+  els.pitchReadout.textContent = (semis > 0 ? '+' : '') + semis + ' st';
+}
+
+// ---------- Preset system (default presets + user-saved custom presets) ----------
+const DEFAULT_PRESETS = {
+  normal:    { label: 'Normal',    pitch: 0,  formant: 0,   robot: 0,  echo: 0 },
+  feminine:  { label: 'Feminize',  pitch: 4,  formant: 85,  robot: 0,  echo: 0 },
+  masculine: { label: 'Masculin.', pitch: -4, formant: -85, robot: 0,  echo: 0 },
+  chipmunk:  { label: 'Chipmunk',  pitch: 8,  formant: 0,   robot: 0,  echo: 0 },
+  deep:      { label: 'Deep',      pitch: -8, formant: 0,   robot: 0,  echo: 0 },
+  robot:     { label: 'Robot',     pitch: -1, formant: 0,   robot: 70, echo: 10 },
+  cave:      { label: 'Cave',      pitch: -4, formant: 0,   robot: 15, echo: 55 },
+};
+const CUSTOM_PRESETS_KEY = 'fazchanger_custom_presets';
+let customPresets = {};
+let activePresetId = 'normal';
+
+function loadCustomPresets() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PRESETS_KEY);
+    customPresets = raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    customPresets = {};
+  }
+}
+
+function saveCustomPresets() {
+  try {
+    localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(customPresets));
+  } catch (e) {
+    // storage unavailable (private browsing, etc.) — presets just won't persist
+  }
+}
+
+function applyPresetData(p) {
+  els.pitchSlider.value = p.pitch;
+  els.formantSlider.value = p.formant;
+  els.robotSlider.value = p.robot;
+  els.echoSlider.value = p.echo;
+  if (p.vol !== undefined) els.volSlider.value = p.vol;
+  syncFaderLabels();
+  applyAllParams();
+}
+
+function selectPreset(id, isCustom) {
+  activePresetId = id;
+  const data = isCustom ? customPresets[id] : DEFAULT_PRESETS[id];
+  if (!data) return;
+  applyPresetData(data);
+  const label = isCustom ? id : DEFAULT_PRESETS[id].label;
+  els.patchReadout.textContent = label.toUpperCase();
+  renderPresets();
+}
+
+function captureCurrentSettings() {
+  return {
+    pitch: parseFloat(els.pitchSlider.value),
+    formant: parseFloat(els.formantSlider.value),
+    robot: parseFloat(els.robotSlider.value),
+    echo: parseFloat(els.echoSlider.value),
+    vol: parseFloat(els.volSlider.value),
+  };
+}
+
+function saveNewPreset() {
+  const raw = prompt('Name this preset:');
+  if (raw === null) return;
+  const name = raw.trim();
+  if (!name) return;
+  if (DEFAULT_PRESETS[name.toLowerCase()]) {
+    alert('That name is reserved for a built-in preset. Please choose another.');
+    return;
+  }
+  if (customPresets[name] && !confirm(`A preset named "${name}" already exists. Overwrite it?`)) {
+    return;
+  }
+  customPresets[name] = captureCurrentSettings();
+  saveCustomPresets();
+  activePresetId = name;
+  renderPresets();
+}
+
+function deleteCustomPreset(name, evt) {
+  evt.stopPropagation();
+  if (!confirm(`Delete preset "${name}"?`)) return;
+  delete customPresets[name];
+  saveCustomPresets();
+  if (activePresetId === name) activePresetId = 'normal';
+  renderPresets();
+}
+
+function renderPresets() {
+  const container = document.getElementById('presets');
+  container.innerHTML = '';
+
+  Object.keys(DEFAULT_PRESETS).forEach(id => {
+    const p = DEFAULT_PRESETS[id];
+    const tile = document.createElement('div');
+    tile.className = 'patch' + (activePresetId === id ? ' active' : '');
+    tile.innerHTML = '<div class="dot"></div>' + p.label;
+    tile.addEventListener('click', () => selectPreset(id, false));
+    container.appendChild(tile);
+  });
+
+  Object.keys(customPresets).forEach(name => {
+    const tile = document.createElement('div');
+    tile.className = 'patch' + (activePresetId === name ? ' active' : '');
+    tile.innerHTML = '<div class="dot"></div>' + name;
+    tile.addEventListener('click', () => selectPreset(name, true));
+    const del = document.createElement('div');
+    del.className = 'patch-delete';
+    del.textContent = '×';
+    del.title = 'Delete preset';
+    del.addEventListener('click', (evt) => deleteCustomPreset(name, evt));
+    tile.appendChild(del);
+    container.appendChild(tile);
+  });
+
+  const addTile = document.createElement('div');
+  addTile.className = 'patch add-preset';
+  addTile.innerHTML = '<div class="plus">+</div>Save Preset';
+  addTile.addEventListener('click', saveNewPreset);
+  container.appendChild(addTile);
+}
+
+function syncFaderLabels() {
+  const semis = els.pitchSlider.value;
+  els.pitchVal.textContent = (semis > 0 ? '+' : '') + semis + ' st';
+  els.formantVal.textContent = (els.formantSlider.value > 0 ? '+' : '') + els.formantSlider.value + '%';
+  els.robotVal.textContent = els.robotSlider.value + '%';
+  els.echoVal.textContent = els.echoSlider.value + '%';
+  els.volVal.textContent = els.volSlider.value + '%';
+}
+
+// ---------- Scope visualizer ----------
+let scopeW = 600, scopeH = 120;
+
+function drawIdleLine() {
+  const ctx = els.canvas.getContext('2d');
+  const w = scopeW, h = scopeH;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(232,48,60,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, h / 2);
+  ctx.lineTo(w, h / 2);
+  ctx.stroke();
+}
+
+function drawScope() {
+  if (!running) return;
+  const ctx = els.canvas.getContext('2d');
+  const w = scopeW, h = scopeH;
+  const data = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(data);
+
+  ctx.fillStyle = 'rgba(5,10,8,0.35)';
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.strokeStyle = 'rgba(232,48,60,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+
+  ctx.beginPath();
+  ctx.strokeStyle = '#ff3b46';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = 'rgba(232,48,60,0.8)';
+  ctx.shadowBlur = 6;
+  const slice = w / data.length;
+  let x = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 128.0;
+    const y = (v * h) / 2;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    x += slice;
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  requestAnimationFrame(drawScope);
+}
+
+// ---------- Event wiring ----------
+els.startBtn.addEventListener('click', () => {
+  if (!running) startAudio(); else stopAudio();
+});
+
+[els.pitchSlider, els.formantSlider, els.robotSlider, els.echoSlider, els.volSlider].forEach(s => {
+  s.addEventListener('input', () => { syncFaderLabels(); applyAllParams(); });
+});
+
+loadCustomPresets();
+renderPresets();
+
+// resize canvas for device pixel ratio crispness
+function fitCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = els.canvas.getBoundingClientRect();
+  scopeW = rect.width || 520;
+  scopeH = 120;
+  els.canvas.width = scopeW * dpr;
+  els.canvas.height = scopeH * dpr;
+  const ctx = els.canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', () => { fitCanvas(); if(!running) drawIdleLine(); });
+fitCanvas();
+drawIdleLine();
+syncFaderLabels();
+</script>
+</body>
+</html>
